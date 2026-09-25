@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Суфлёр">
+<meta name="theme-color" content="#161B12">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" href="icon.png">
+<title>Суфлёр UGC</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500&family=Manrope:wght@400;500;600;700&family=Bad+Script&display=swap">
+<style>
+  :root{
+    --paper:#F2EFE9; --card:#FBFAF7; --ink:#1E1F1B; --text:#3B3A35; --muted:#7D786D; --line:#DCD5C8;
+    --forest:#252D1D; --olive:#758559; --tan:#D9CBB1; --tan-2:#C7B792; --cream:#F3EEE4; --stage:#161B12; --rec:#D2453A;
+    --serif:'Playfair Display', Georgia, serif; --sans:'Manrope', system-ui, -apple-system, sans-serif; --hand:'Bad Script', cursive;
+    --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px);
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; }
+  body{ background:var(--paper); color:var(--text); font-family:var(--sans); -webkit-tap-highlight-color:transparent; -webkit-text-size-adjust:100%; }
+  button, input, textarea{ font:inherit; color:inherit; }
+  button{ cursor:pointer; }
+  [hidden]{ display:none !important; }
+
+  /* ---------- настройки ---------- */
+  .wrap{ max-width:640px; margin:0 auto; padding:calc(20px + var(--st)) 16px calc(40px + var(--sb)); display:flex; flex-direction:column; gap:18px; }
+  .brand{ display:flex; justify-content:space-between; font:600 11px var(--sans); letter-spacing:.2em; text-transform:uppercase; color:var(--muted); }
+  h1{ font:400 34px/1.05 var(--serif); text-transform:uppercase; color:var(--ink); margin:0; }
+  .sub{ font:400 19px var(--hand); color:var(--ink); transform:rotate(-2deg); transform-origin:left; margin-top:6px; }
+  .card{ background:var(--card); border-radius:14px; box-shadow:0 2px 10px rgba(60,50,30,.08); padding:14px; }
+  .lbl{ display:block; font:700 11px var(--sans); letter-spacing:.14em; text-transform:uppercase; color:var(--olive); margin-bottom:8px; }
+  textarea{ width:100%; min-height:200px; resize:vertical; border:1px solid var(--line); border-radius:10px; padding:12px; background:#fff; color:var(--ink); font-size:16px; line-height:1.5; }
+  .stats{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .chip{ font:600 12px var(--sans); padding:6px 10px; border-radius:99px; background:var(--tan); color:var(--ink); font-variant-numeric:tabular-nums; }
+  .chip.out{ background:transparent; box-shadow:inset 0 0 0 1px var(--olive); color:var(--olive); }
+  .ghost{ border:1px solid var(--line); background:transparent; border-radius:99px; padding:8px 14px; font-size:13px; font-weight:600; margin-top:10px; }
+  .settings{ display:grid; gap:16px; }
+  .row{ display:grid; grid-template-columns:1fr auto; gap:6px 12px; align-items:center; }
+  .row .name{ font-weight:600; color:var(--ink); font-size:15px; }
+  .row .val{ font-variant-numeric:tabular-nums; font-weight:700; color:var(--olive); font-size:14px; }
+  .row input[type=range]{ grid-column:1 / -1; width:100%; accent-color:var(--forest); }
+  .seg{ display:flex; background:var(--paper); border-radius:99px; padding:3px; gap:3px; }
+  .seg button{ border:0; background:transparent; padding:7px 12px; border-radius:99px; font-size:13px; font-weight:600; color:var(--muted); }
+  .seg button[aria-pressed=true]{ background:var(--forest); color:var(--cream); }
+  .start{ border:0; border-radius:99px; background:var(--forest); color:var(--cream); padding:16px 20px; font:600 17px var(--sans); box-shadow:0 6px 18px rgba(37,45,29,.25); }
+  .how{ font-size:14px; line-height:1.55; display:grid; gap:8px; }
+  .how b{ color:var(--ink); }
+  .err{ background:#fff; border-left:3px solid var(--rec); padding:10px 12px; border-radius:8px; font-size:14px; line-height:1.45; color:var(--ink); }
+
+  /* ---------- съёмка ---------- */
+  .cam{ position:fixed; inset:0; background:#000; z-index:10; overflow:hidden; touch-action:none; }
+  video#live{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  video#live.selfie{ transform:scaleX(-1); }
+  .overlay{ position:absolute; left:0; right:0; top:0; padding-top:var(--st); overflow:hidden; }
+  .overlay .bg{ position:absolute; inset:0; background:rgba(12,15,10,var(--op,.55)); }
+  .overlay .fade{ position:absolute; left:0; right:0; bottom:0; height:30%; background:linear-gradient(rgba(12,15,10,0), rgba(12,15,10,var(--op,.55))); }
+  .scroller{ position:absolute; left:0; right:0; top:0; will-change:transform; }
+  .ptext{ margin:0; padding:0 20px; white-space:pre-wrap; word-wrap:break-word; color:#fff; font-weight:600; line-height:1.35; text-shadow:0 1px 3px rgba(0,0,0,.5); }
+  .ptext .end{ display:block; text-align:center; font:400 .7em var(--hand); color:var(--tan); margin-top:1em; }
+  .marker{ position:absolute; left:0; right:0; border-top:2px solid rgba(217,203,177,.7); pointer-events:none; }
+  .progress{ position:absolute; left:0; bottom:0; height:3px; background:var(--tan); width:0; }
+
+  .topbar{ position:absolute; right:12px; display:flex; gap:8px; z-index:3; }
+  .timer{ position:absolute; left:12px; z-index:3; font:700 14px var(--sans); color:#fff; background:rgba(0,0,0,.45); padding:6px 10px; border-radius:99px; font-variant-numeric:tabular-nums; display:flex; align-items:center; gap:6px; }
+  .timer i{ width:9px; height:9px; border-radius:50%; background:var(--rec); display:inline-block; }
+
+  .bar{ position:absolute; left:0; right:0; bottom:0; padding:14px 12px calc(16px + var(--sb)); display:flex; align-items:center; justify-content:center; gap:14px;
+    background:linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.55)); z-index:3; }
+  .rb{ width:48px; height:48px; border-radius:50%; border:1px solid rgba(255,255,255,.35); background:rgba(0,0,0,.35); color:#fff;
+    display:flex; align-items:center; justify-content:center; font:600 20px var(--sans); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
+  .rb svg{ width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .recbtn{ width:74px; height:74px; border-radius:50%; border:4px solid #fff; background:transparent; display:flex; align-items:center; justify-content:center; padding:0; }
+  .recbtn span{ width:56px; height:56px; border-radius:50%; background:var(--rec); transition:all .2s; }
+  .recbtn.on span{ width:28px; height:28px; border-radius:6px; }
+  .spd{ min-width:54px; text-align:center; font:700 13px var(--sans); color:#fff; line-height:1.2; font-variant-numeric:tabular-nums; }
+  .spd small{ display:block; font-weight:500; font-size:10px; opacity:.7; }
+  .count{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font:400 34vmin/1 var(--serif); color:var(--tan); background:rgba(0,0,0,.35); z-index:4; }
+
+  /* ---------- готовое видео ---------- */
+  .result{ position:fixed; inset:0; z-index:20; background:var(--stage); display:flex; flex-direction:column; padding:calc(14px + var(--st)) 16px calc(16px + var(--sb)); gap:12px; }
+  .result video{ flex:1; min-height:0; width:100%; object-fit:contain; background:#000; border-radius:12px; }
+  .result .acts{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .result button, .result a.btn{ border:0; border-radius:99px; padding:15px 12px; font:600 15px var(--sans); text-align:center; text-decoration:none; }
+  .save{ background:var(--tan); color:var(--forest); grid-column:1 / -1; }
+  .again{ background:rgba(243,238,228,.12); color:var(--cream); }
+  .note{ color:rgba(243,238,228,.75); font-size:13px; line-height:1.45; text-align:center; }
+</style>
+</head>
+<body>
+
+<div class="wrap" id="setup">
+  <div class="brand"><span>UGC · суфлёр</span><span>Alisa Yablokova</span></div>
+  <div><h1>Суфлёр</h1><div class="sub">читай текст и снимай себя</div></div>
+
+  <div class="card">
+    <label class="lbl" for="script">Твой текст</label>
+    <textarea id="script"></textarea>
+    <div class="stats"><span class="chip" id="wordsChip"></span><span class="chip out" id="timeChip"></span></div>
+    <button class="ghost" id="clearBtn" type="button">Очистить</button>
+  </div>
+
+  <div class="card settings">
+    <div class="row"><span class="name">Скорость</span><span class="val" id="speedVal"></span>
+      <input type="range" id="speed" min="60" max="240" step="5" aria-label="Скорость"></div>
+    <div class="row"><span class="name">Размер текста</span><span class="val" id="sizeVal"></span>
+      <input type="range" id="size" min="20" max="56" step="2" aria-label="Размер текста"></div>
+    <div class="row"><span class="name">Высота окна с текстом</span><span class="val" id="hVal"></span>
+      <input type="range" id="boxh" min="20" max="60" step="5" aria-label="Высота окна с текстом"></div>
+    <div class="row"><span class="name">Затемнение под текстом</span><span class="val" id="opVal"></span>
+      <input type="range" id="op" min="0" max="90" step="5" aria-label="Затемнение"></div>
+    <div class="row"><span class="name">Камера</span>
+      <div class="seg"><button type="button" data-cam="user" id="camFront">Фронтальная</button><button type="button" data-cam="environment" id="camBack">Основная</button></div></div>
+    <div class="row"><span class="name">Отсчёт 3-2-1</span>
+      <div class="seg"><button type="button" data-cd="0" id="cdOff">Нет</button><button type="button" data-cd="1" id="cdOn">Да</button></div></div>
+  </div>
+
+  <div class="err" id="err" hidden></div>
+  <button class="start" id="openBtn" type="button">Открыть камеру</button>
+
+  <div class="card how">
+    <span class="lbl">Как пользоваться</span>
+    <div><b>Красная кнопка</b> запускает запись и прокрутку текста одновременно. Нажми ещё раз, чтобы остановить.</div>
+    <div><b>Тап по тексту</b> ставит прокрутку на паузу, <b>свайп</b> по тексту отматывает назад или вперёд.</div>
+    <div><b>Текст в видео не попадает</b>: записываешься только ты.</div>
+    <div><b>После записи</b> нажми «Сохранить видео» и выбери «Сохранить видео» в меню айфона — ролик окажется в Фото.</div>
+    <div><b>Как приложение:</b> в Safari «Поделиться» → «На экран Домой».</div>
+  </div>
+</div>
+
+<div class="cam" id="cam" hidden>
+  <video id="live" playsinline muted autoplay></video>
+  <div class="overlay" id="overlay">
+    <div class="bg"></div>
+    <div class="scroller" id="scroller"><div class="ptext" id="ptext"></div></div>
+    <div class="fade"></div>
+    <div class="marker" id="marker"></div>
+    <div class="progress" id="progress"></div>
+  </div>
+  <div class="timer" id="timer" hidden><i></i><span id="timerTxt">0:00</span></div>
+  <div class="bar">
+    <button class="rb" id="closeBtn" type="button" aria-label="Назад"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <button class="rb" id="slowBtn" type="button" aria-label="Медленнее">−</button>
+    <button class="recbtn" id="recBtn" type="button" aria-label="Запись"><span></span></button>
+    <button class="rb" id="fastBtn" type="button" aria-label="Быстрее">+</button>
+    <div class="spd" id="spd"></div>
+  </div>
+  <div class="count" id="count" hidden></div>
+</div>
+
+<div class="result" id="result" hidden>
+  <video id="outVideo" playsinline controls></video>
+  <div class="acts">
+    <button class="save" id="saveBtn" type="button">Сохранить видео</button>
+    <button class="again" id="retakeBtn" type="button">Переснять</button>
+    <button class="again" id="doneBtn" type="button">К тексту</button>
+  </div>
+  <div class="note" id="saveNote">Не нужно быть идеальной. Нужно быть настоящей ♡</div>
+</div>
+
+<script>
+(() => {
+  const SAMPLE = `Мои первые UGC-ролики никто не досматривал. И дело было вовсе не в картинке.
+
+Я снимала красиво: свет у окна, аккуратный фон, продукт в кадре. Но первые три секунды были пустыми.
+
+А зритель решает за одну секунду — остаться или листать дальше.
+
+Поэтому теперь я начинаю с фразы, которая цепляет. И только потом показываю продукт в действии.
+
+Сохрани, чтобы не забыть.`;
+  const $ = id => document.getElementById(id);
+  const store = {
+    get(k, d){ try{ const v = localStorage.getItem('sf.' + k); return v === null ? d : JSON.parse(v); } catch(e){ return d; } },
+    set(k, v){ try{ localStorage.setItem('sf.' + k, JSON.stringify(v)); } catch(e){} }
+  };
+  const st = { text: store.get('text', SAMPLE), wpm: store.get('wpm', 130), size: store.get('size', 30),
+               boxh: store.get('boxh', 35), op: store.get('op', 55), cam: store.get('cam', 'user'), cd: store.get('cd', 1) };
+
+  const ta = $('script'); ta.value = st.text;
+  const words = t => (t.trim().match(/\S+/g) || []).length;
+  const plural = (n, a, b, c) => { const m = n % 10, h = n % 100; return m === 1 && h !== 11 ? a : (m >= 2 && m <= 4 && (h < 10 || h >= 20) ? b : c); };
+  const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+  function sync(){
+    const w = words(ta.value);
+    $('wordsChip').textContent = `${w} ${plural(w, 'слово', 'слова', 'слов')}`;
+    $('timeChip').textContent = `≈ ${fmt(w / st.wpm * 60)}`;
+    $('speed').value = st.wpm; $('speedVal').textContent = `${st.wpm} слов/мин`;
+    $('size').value = st.size; $('sizeVal').textContent = `${st.size} px`;
+    $('boxh').value = st.boxh; $('hVal').textContent = `${st.boxh}% экрана`;
+    $('op').value = st.op; $('opVal').textContent = `${st.op}%`;
+    $('camFront').setAttribute('aria-pressed', st.cam === 'user'); $('camBack').setAttribute('aria-pressed', st.cam !== 'user');
+    $('cdOff').setAttribute('aria-pressed', !st.cd); $('cdOn').setAttribute('aria-pressed', !!st.cd);
+    $('spd').innerHTML = `${st.wpm}<small>слов/мин</small>`;
+  }
+  ta.addEventListener('input', () => { st.text = ta.value; store.set('text', st.text); sync(); });
+  $('clearBtn').onclick = () => { ta.value = ''; ta.dispatchEvent(new Event('input')); ta.focus(); };
+  for (const [id, key] of [['speed', 'wpm'], ['size', 'size'], ['boxh', 'boxh'], ['op', 'op']])
+    $(id).oninput = e => { st[key] = +e.target.value; store.set(key, st[key]); sync(); };
+  document.querySelectorAll('[data-cam]').forEach(b => b.onclick = () => { st.cam = b.dataset.cam; store.set('cam', st.cam); sync(); });
+  document.querySelectorAll('[data-cd]').forEach(b => b.onclick = () => { st.cd = +b.dataset.cd; store.set('cd', st.cd); sync(); });
+  sync();
+
+  /* ---------- камера ---------- */
+  let stream = null, wake = null;
+  const live = $('live');
+  function showErr(msg){ const e = $('err'); e.textContent = msg; e.hidden = !msg; }
+
+  async function openCam(){
+    showErr('');
+    if (!navigator.mediaDevices?.getUserMedia){ showErr('Этот браузер не даёт доступ к камере. Открой суфлёр в Safari.'); return; }
+    try{
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: st.cam, width: { ideal: 1080 }, height: { ideal: 1920 }, frameRate: { ideal: 30 } },
+        audio: { echoCancellation: true, noiseSuppression: true }
+      });
+    } catch(e){
+      showErr('Нет доступа к камере или микрофону. Разреши доступ: «Настройки» → «Safari» → «Камера» и «Микрофон» → «Разрешить», затем обнови страницу.');
+      return;
+    }
+    live.srcObject = stream; live.classList.toggle('selfie', st.cam === 'user');
+    try{ await live.play(); } catch(e){}
+    $('setup').hidden = true; $('cam').hidden = false;
+    prepareText();
+    try{ wake = await navigator.wakeLock?.request('screen'); } catch(e){}
+  }
+  function stopCam(){
+    if (recorder && recorder.state !== 'inactive') recorder.stop();
+    pause(); stream?.getTracks().forEach(t => t.stop()); stream = null;
+    $('cam').hidden = true; $('setup').hidden = false;
+    try{ wake?.release(); } catch(e){} wake = null;
+  }
+  $('openBtn').onclick = openCam;
+  $('closeBtn').onclick = stopCam;
+
+  /* ---------- прокрутка текста ---------- */
+  const overlay = $('overlay'), scroller = $('scroller'), ptext = $('ptext');
+  let y = 0, maxY = 0, lineY = 0, pxPerSec = 40, running = false, last = 0, raf = 0;
+
+  function prepareText(){
+    ptext.textContent = st.text.trim() ? st.text : SAMPLE;
+    const end = document.createElement('span'); end.className = 'end'; end.textContent = 'Стоп ♡'; ptext.appendChild(end);
+    overlay.style.height = `calc(${st.boxh}% + var(--st))`;
+    overlay.style.setProperty('--op', st.op / 100);
+    ptext.style.fontSize = st.size + 'px';
+    const safeTop = parseFloat(getComputedStyle(overlay).paddingTop) || 0;
+    lineY = safeTop + 12;
+    $('marker').style.top = (lineY + st.size * 1.35 + 4) + 'px';
+    $('marker').style.display = 'none';
+    $('timer').style.top = `calc(${st.boxh}% + var(--st) + 10px)`;
+    maxY = ptext.scrollHeight;
+    pxPerSec = maxY / (Math.max(1, words(ptext.textContent)) / st.wpm * 60);
+    y = 0; paint(); sync();
+  }
+  function paint(){ scroller.style.transform = `translateY(${lineY - y}px)`; $('progress').style.width = Math.min(100, y / maxY * 100) + '%'; }
+  function tick(t){
+    if (!running) return;
+    const dt = last ? (t - last) / 1000 : 0; last = t;
+    y = Math.min(maxY, y + pxPerSec * Math.min(dt, .1)); paint();
+    if (y >= maxY){ running = false; return; }
+    raf = requestAnimationFrame(tick);
+  }
+  function play(){ if (y >= maxY) y = 0; running = true; last = 0; raf = requestAnimationFrame(tick); }
+  function pause(){ running = false; cancelAnimationFrame(raf); }
+  const nudge = d => { st.wpm = Math.min(240, Math.max(60, st.wpm + d)); store.set('wpm', st.wpm);
+    pxPerSec = maxY / (Math.max(1, words(ptext.textContent)) / st.wpm * 60); sync(); };
+  $('slowBtn').onclick = () => nudge(-10);
+  $('fastBtn').onclick = () => nudge(10);
+
+  let drag = null;
+  overlay.addEventListener('pointerdown', e => { drag = { sy: e.clientY, y0: y, moved: false }; });
+  overlay.addEventListener('pointermove', e => {
+    if (!drag) return; const d = e.clientY - drag.sy;
+    if (Math.abs(d) > 8){ drag.moved = true; if (running) pause(); }
+    if (drag.moved){ y = Math.min(maxY, Math.max(0, drag.y0 - d)); paint(); }
+  });
+  overlay.addEventListener('pointerup', () => { if (drag && !drag.moved) (running ? pause() : play()); drag = null; });
+  overlay.addEventListener('pointercancel', () => { drag = null; });
+
+  /* ---------- запись ---------- */
+  let recorder = null, chunks = [], recStart = 0, timerIv = 0, outBlob = null, outType = 'video/mp4';
+  function pickType(){
+    const types = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'];
+    return types.find(t => window.MediaRecorder && MediaRecorder.isTypeSupported?.(t)) || '';
+  }
+  function countdown(){
+    return new Promise(res => {
+      if (!st.cd) return res();
+      const c = $('count'); c.hidden = false; let k = 3; c.textContent = k;
+      const iv = setInterval(() => { k--; if (k <= 0){ clearInterval(iv); c.hidden = true; res(); } else c.textContent = k; }, 800);
+    });
+  }
+  async function startRec(){
+    if (!window.MediaRecorder){ alert('Запись видео не поддерживается в этой версии iOS. Обнови iPhone до последней версии.'); return; }
+    await countdown();
+    if (!stream) return;
+    const type = pickType();
+    try{ recorder = new MediaRecorder(stream, type ? { mimeType: type, videoBitsPerSecond: 8000000 } : undefined); }
+    catch(e){ recorder = new MediaRecorder(stream); }
+    outType = (recorder.mimeType || type || 'video/mp4').split(';')[0];
+    chunks = [];
+    recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+    recorder.onstop = showResult;
+    recorder.start(1000);
+    $('recBtn').classList.add('on'); $('recBtn').setAttribute('aria-label', 'Остановить запись');
+    recStart = Date.now(); $('timer').hidden = false; $('timerTxt').textContent = '0:00';
+    timerIv = setInterval(() => { $('timerTxt').textContent = fmt((Date.now() - recStart) / 1000); }, 250);
+    y = 0; paint(); play();
+  }
+  function stopRec(){
+    if (recorder && recorder.state !== 'inactive') recorder.stop();
+    pause(); clearInterval(timerIv); $('timer').hidden = true;
+    $('recBtn').classList.remove('on'); $('recBtn').setAttribute('aria-label', 'Запись');
+  }
+  $('recBtn').onclick = () => (recorder && recorder.state === 'recording') ? stopRec() : startRec();
+
+  function showResult(){
+    if (!chunks.length) return;
+    outBlob = new Blob(chunks, { type: outType });
+    const v = $('outVideo'); v.src = URL.createObjectURL(outBlob);
+    $('result').hidden = false;
+    $('saveNote').textContent = 'Не нужно быть идеальной. Нужно быть настоящей ♡';
+  }
+  function fileName(){
+    const d = new Date(), p = n => String(n).padStart(2, '0');
+    return `ugc_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}.${outType.includes('mp4') ? 'mp4' : 'webm'}`;
+  }
+  $('saveBtn').onclick = async () => {
+    if (!outBlob) return;
+    const file = new File([outBlob], fileName(), { type: outType });
+    if (navigator.canShare && navigator.canShare({ files: [file] })){
+      try{ await navigator.share({ files: [file] }); $('saveNote').textContent = 'В меню выбери «Сохранить видео» — ролик появится в Фото.'; return; }
+      catch(e){ if (e.name === 'AbortError') return; }
+    }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(outBlob); a.download = file.name;
+    document.body.appendChild(a); a.click(); a.remove();
+    $('saveNote').textContent = 'Видео сохранено в «Файлы» → «Загрузки». Оттуда его можно переслать в Фото.';
+  };
+  const closeResult = () => { $('result').hidden = true; const v = $('outVideo'); v.pause(); URL.revokeObjectURL(v.src); v.removeAttribute('src'); };
+  $('retakeBtn').onclick = () => { closeResult(); y = 0; paint(); };
+  $('doneBtn').onclick = () => { closeResult(); stopCam(); };
+
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && recorder?.state === 'recording') stopRec(); });
+})();
+</script>
+</body>
+</html>
