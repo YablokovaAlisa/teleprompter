@@ -305,7 +305,7 @@
     chunks = [];
     recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
     recorder.onstop = showResult;
-    recorder.start(1000);
+    recorder.start();
     $('recBtn').classList.add('on'); $('recBtn').setAttribute('aria-label', 'Остановить запись');
     recStart = Date.now(); $('timer').hidden = false; $('timerTxt').textContent = '0:00';
     timerIv = setInterval(() => { $('timerTxt').textContent = fmt((Date.now() - recStart) / 1000); }, 250);
