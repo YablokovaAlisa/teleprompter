@@ -59,7 +59,7 @@
   .overlay .bg{ position:absolute; inset:0; background:rgba(12,15,10,var(--op,.55)); }
   .overlay .fade{ position:absolute; left:0; right:0; bottom:0; height:30%; background:linear-gradient(rgba(12,15,10,0), rgba(12,15,10,var(--op,.55))); }
   .scroller{ position:absolute; left:0; right:0; top:0; will-change:transform; }
-  .ptext{ margin:0; padding:0 20px; white-space:pre-wrap; word-wrap:break-word; color:#fff; font-weight:600; line-height:1.35; text-shadow:0 1px 3px rgba(0,0,0,.5); }
+  .ptext{ margin:0; padding:0 20px; white-space:pre-wrap; word-wrap:break-word; color:#fff; font-weight:600; line-height:1.35; }
   .ptext .end{ display:block; text-align:center; font:400 .7em var(--hand); color:var(--tan); margin-top:1em; }
   .marker{ position:absolute; left:0; right:0; border-top:2px solid rgba(217,203,177,.7); pointer-events:none; }
   .progress{ position:absolute; left:0; bottom:0; height:3px; background:var(--tan); width:0; }
@@ -79,6 +79,8 @@
   .spd{ min-width:54px; text-align:center; font:700 13px var(--sans); color:#fff; line-height:1.2; font-variant-numeric:tabular-nums; }
   .spd small{ display:block; font-weight:500; font-size:10px; opacity:.7; }
   .res{ position:absolute; left:12px; bottom:calc(112px + var(--sb)); z-index:3; font:600 12px var(--sans); color:#fff; background:rgba(0,0,0,.45); padding:5px 9px; border-radius:99px; font-variant-numeric:tabular-nums; }
+  .warn{ position:absolute; left:12px; right:12px; bottom:calc(140px + var(--sb)); z-index:4; background:#D2453A; color:#fff; font:600 14px/1.4 var(--sans); padding:10px 12px; border-radius:12px; }
+  .diag{ color:rgba(243,238,228,.55); font-size:11px; text-align:center; font-variant-numeric:tabular-nums; }
   .count{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font:400 34vmin/1 var(--serif); color:var(--tan); background:rgba(0,0,0,.35); z-index:4; }
 
   /* ---------- готовое видео ---------- */
@@ -144,6 +146,7 @@
     <div class="progress" id="progress"></div>
   </div>
   <div class="res" id="res" hidden></div>
+  <div class="warn" id="warn" hidden>Видео замерло, а звук идёт. Останови запись и попробуй качество 720p.</div>
   <div class="timer" id="timer" hidden><i></i><span id="timerTxt">0:00</span></div>
   <div class="bar">
     <button class="rb" id="closeBtn" type="button" aria-label="Назад"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
@@ -162,6 +165,7 @@
     <button class="again" id="retakeBtn" type="button">Переснять</button>
     <button class="again" id="doneBtn" type="button">К тексту</button>
   </div>
+  <div class="diag" id="diag"></div>
   <div class="note" id="saveNote">Не нужно быть идеальной. Нужно быть настоящей ♡</div>
 </div>
 
@@ -295,6 +299,7 @@
   overlay.addEventListener('pointercancel', () => { drag = null; });
 
   /* ---------- запись ---------- */
+  let sizes = [], frozen = false, recDur = 0;
   let recorder = null, chunks = [], recStart = 0, timerIv = 0, outBlob = null, outType = 'video/mp4';
   function pickType(){
     const types = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'];
@@ -316,7 +321,17 @@
     catch(e){ recorder = new MediaRecorder(stream); }
     outType = (recorder.mimeType || type || 'video/mp4').split(';')[0];
     chunks = [];
-    recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+    sizes = []; frozen = false; $('warn').hidden = true;
+    recorder.ondataavailable = e => {
+      if (!(e.data && e.data.size)) return;
+      chunks.push(e.data); sizes.push(e.data.size);
+      // сторож: если куски вдруг стали в 5+ раз меньше обычных — видео перестало писаться
+      if (sizes.length >= 6 && !frozen && recorder.state === 'recording'){
+        const base = sizes.slice(1, 4).sort((a, b) => a - b)[1];
+        const n = sizes.length;
+        if (base > 0 && sizes[n - 1] < base * 0.2 && sizes[n - 2] < base * 0.2){ frozen = true; $('warn').hidden = false; }
+      }
+    };
     recorder.onstop = showResult;
     recorder.start(1000);
     $('recBtn').classList.add('on'); $('recBtn').setAttribute('aria-label', 'Остановить запись');
@@ -325,8 +340,9 @@
     y = 0; paint(); play();
   }
   function stopRec(){
+    recDur = (Date.now() - recStart) / 1000;
     if (recorder && recorder.state !== 'inactive') recorder.stop();
-    pause(); clearInterval(timerIv); $('timer').hidden = true;
+    pause(); clearInterval(timerIv); $('warn').hidden = true; $('timer').hidden = true;
     $('recBtn').classList.remove('on'); $('recBtn').setAttribute('aria-label', 'Запись');
   }
   $('recBtn').onclick = () => (recorder && recorder.state === 'recording') ? stopRec() : startRec();
@@ -336,6 +352,9 @@
     outBlob = new Blob(chunks, { type: outType });
     const v = $('outVideo'); v.src = URL.createObjectURL(outBlob);
     $('result').hidden = false;
+    v.onloadedmetadata = () => {
+      $('diag').textContent = `${fmt(recDur)} · ${(outBlob.size / 1048576).toFixed(1)} МБ · ${v.videoWidth}×${v.videoHeight} · ${outType}${frozen ? ' · было замирание' : ''}`;
+    };
     $('saveNote').textContent = 'Не нужно быть идеальной. Нужно быть настоящей ♡';
   }
   function fileName(){
