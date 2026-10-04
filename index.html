@@ -132,7 +132,7 @@
     <div><b>Тап по тексту</b> ставит прокрутку на паузу, <b>свайп</b> по тексту отматывает назад или вперёд.</div>
     <div><b>Текст в видео не попадает</b>: записываешься только ты.</div>
     <div><b>После записи</b> нажми «Сохранить видео» и выбери «Сохранить видео» в меню айфона — ролик окажется в Фото.</div>
-    <div><b>Как приложение:</b> в Safari «Поделиться» → «На экран Домой».</div>
+    <div><b>Как приложение:</b> iPhone — в Safari «Поделиться» → «На экран Домой». Android — в Chrome меню ⋮ → «Добавить на главный экран».</div>
   </div>
 </div>
 
@@ -222,14 +222,14 @@
 
   async function openCam(){
     showErr('');
-    if (!navigator.mediaDevices?.getUserMedia){ showErr('Этот браузер не даёт доступ к камере. Открой суфлёр в Safari.'); return; }
+    if (!navigator.mediaDevices?.getUserMedia){ showErr('Этот браузер не даёт доступ к камере. Открой суфлёр в Safari (iPhone) или Chrome (Android).'); return; }
     try{
       stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: st.cam, width: { ideal: st.q }, height: { ideal: Math.round(st.q * 16 / 9) }, frameRate: { ideal: 30, max: 30 } },
         audio: { echoCancellation: true, noiseSuppression: true }
       });
     } catch(e){
-      showErr('Нет доступа к камере или микрофону. Разреши доступ: «Настройки» → «Safari» → «Камера» и «Микрофон» → «Разрешить», затем обнови страницу.');
+      showErr('Нет доступа к камере или микрофону. iPhone: «Настройки» → «Safari» → «Камера» и «Микрофон» → «Разрешить». Android: значок замка слева от адреса → «Разрешения» → включи камеру и микрофон. Затем обнови страницу.');
       return;
     }
     try{
