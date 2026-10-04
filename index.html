@@ -71,7 +71,7 @@
   .bar{ position:absolute; left:0; right:0; bottom:0; padding:14px 12px calc(16px + var(--sb)); display:flex; align-items:center; justify-content:center; gap:14px;
     background:linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.55)); z-index:3; }
   .rb{ width:48px; height:48px; border-radius:50%; border:1px solid rgba(255,255,255,.35); background:rgba(0,0,0,.35); color:#fff;
-    display:flex; align-items:center; justify-content:center; font:600 20px var(--sans); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
+    display:flex; align-items:center; justify-content:center; font:600 20px var(--sans); }
   .rb svg{ width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
   .recbtn{ width:74px; height:74px; border-radius:50%; border:4px solid #fff; background:transparent; display:flex; align-items:center; justify-content:center; padding:0; }
   .recbtn span{ width:56px; height:56px; border-radius:50%; background:var(--rec); transition:all .2s; }
@@ -114,6 +114,8 @@
       <input type="range" id="op" min="0" max="90" step="5" aria-label="Затемнение"></div>
     <div class="row"><span class="name">Камера</span>
       <div class="seg"><button type="button" data-cam="user" id="camFront">Фронтальная</button><button type="button" data-cam="environment" id="camBack">Основная</button></div></div>
+    <div class="row"><span class="name">Качество видео</span>
+      <div class="seg"><button type="button" data-q="1080" id="q1080">1080p</button><button type="button" data-q="720" id="q720">720p</button></div></div>
     <div class="row"><span class="name">Отсчёт 3-2-1</span>
       <div class="seg"><button type="button" data-cd="0" id="cdOff">Нет</button><button type="button" data-cd="1" id="cdOn">Да</button></div></div>
   </div>
@@ -178,7 +180,7 @@
     set(k, v){ try{ localStorage.setItem('sf.' + k, JSON.stringify(v)); } catch(e){} }
   };
   const st = { text: store.get('text', SAMPLE), wpm: store.get('wpm', 130), size: store.get('size', 30),
-               boxh: store.get('boxh', 35), op: store.get('op', 55), cam: store.get('cam', 'user'), cd: store.get('cd', 1) };
+               boxh: store.get('boxh', 35), op: store.get('op', 55), cam: store.get('cam', 'user'), cd: store.get('cd', 1), q: store.get('q', 1080) };
 
   const ta = $('script'); ta.value = st.text;
   const words = t => (t.trim().match(/\S+/g) || []).length;
@@ -194,6 +196,7 @@
     $('boxh').value = st.boxh; $('hVal').textContent = `${st.boxh}% экрана`;
     $('op').value = st.op; $('opVal').textContent = `${st.op}%`;
     $('camFront').setAttribute('aria-pressed', st.cam === 'user'); $('camBack').setAttribute('aria-pressed', st.cam !== 'user');
+    $('q1080').setAttribute('aria-pressed', st.q !== 720); $('q720').setAttribute('aria-pressed', st.q === 720);
     $('cdOff').setAttribute('aria-pressed', !st.cd); $('cdOn').setAttribute('aria-pressed', !!st.cd);
     $('spd').innerHTML = `${st.wpm}<small>слов/мин</small>`;
   }
@@ -202,6 +205,7 @@
   for (const [id, key] of [['speed', 'wpm'], ['size', 'size'], ['boxh', 'boxh'], ['op', 'op']])
     $(id).oninput = e => { st[key] = +e.target.value; store.set(key, st[key]); sync(); };
   document.querySelectorAll('[data-cam]').forEach(b => b.onclick = () => { st.cam = b.dataset.cam; store.set('cam', st.cam); sync(); });
+  document.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { st.q = +b.dataset.q; store.set('q', st.q); sync(); });
   document.querySelectorAll('[data-cd]').forEach(b => b.onclick = () => { st.cd = +b.dataset.cd; store.set('cd', st.cd); sync(); });
   sync();
 
@@ -215,7 +219,7 @@
     if (!navigator.mediaDevices?.getUserMedia){ showErr('Этот браузер не даёт доступ к камере. Открой суфлёр в Safari.'); return; }
     try{
       stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: st.cam, width: { ideal: 1080 }, height: { ideal: 1920 }, frameRate: { ideal: 30 } },
+        video: { facingMode: st.cam, width: { ideal: st.q === 720 ? 720 : 1080 }, height: { ideal: st.q === 720 ? 1280 : 1920 }, frameRate: { ideal: 30, max: 30 } },
         audio: { echoCancellation: true, noiseSuppression: true }
       });
     } catch(e){
@@ -299,13 +303,13 @@
     await countdown();
     if (!stream) return;
     const type = pickType();
-    try{ recorder = new MediaRecorder(stream, type ? { mimeType: type, videoBitsPerSecond: 8000000 } : undefined); }
+    try{ recorder = new MediaRecorder(stream, type ? { mimeType: type } : undefined); }
     catch(e){ recorder = new MediaRecorder(stream); }
     outType = (recorder.mimeType || type || 'video/mp4').split(';')[0];
     chunks = [];
     recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
     recorder.onstop = showResult;
-    recorder.start();
+    recorder.start(1000);
     $('recBtn').classList.add('on'); $('recBtn').setAttribute('aria-label', 'Остановить запись');
     recStart = Date.now(); $('timer').hidden = false; $('timerTxt').textContent = '0:00';
     timerIv = setInterval(() => { $('timerTxt').textContent = fmt((Date.now() - recStart) / 1000); }, 250);
