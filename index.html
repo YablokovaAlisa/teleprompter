@@ -78,6 +78,7 @@
   .recbtn.on span{ width:28px; height:28px; border-radius:6px; }
   .spd{ min-width:54px; text-align:center; font:700 13px var(--sans); color:#fff; line-height:1.2; font-variant-numeric:tabular-nums; }
   .spd small{ display:block; font-weight:500; font-size:10px; opacity:.7; }
+  .res{ position:absolute; left:12px; bottom:calc(112px + var(--sb)); z-index:3; font:600 12px var(--sans); color:#fff; background:rgba(0,0,0,.45); padding:5px 9px; border-radius:99px; font-variant-numeric:tabular-nums; }
   .count{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font:400 34vmin/1 var(--serif); color:var(--tan); background:rgba(0,0,0,.35); z-index:4; }
 
   /* ---------- готовое видео ---------- */
@@ -115,7 +116,7 @@
     <div class="row"><span class="name">Камера</span>
       <div class="seg"><button type="button" data-cam="user" id="camFront">Фронтальная</button><button type="button" data-cam="environment" id="camBack">Основная</button></div></div>
     <div class="row"><span class="name">Качество видео</span>
-      <div class="seg"><button type="button" data-q="1080" id="q1080">1080p</button><button type="button" data-q="720" id="q720">720p</button></div></div>
+      <div class="seg"><button type="button" data-q="1440" id="q1440">2K</button><button type="button" data-q="1080" id="q1080">1080p</button><button type="button" data-q="720" id="q720">720p</button></div></div>
     <div class="row"><span class="name">Отсчёт 3-2-1</span>
       <div class="seg"><button type="button" data-cd="0" id="cdOff">Нет</button><button type="button" data-cd="1" id="cdOn">Да</button></div></div>
   </div>
@@ -142,6 +143,7 @@
     <div class="marker" id="marker"></div>
     <div class="progress" id="progress"></div>
   </div>
+  <div class="res" id="res" hidden></div>
   <div class="timer" id="timer" hidden><i></i><span id="timerTxt">0:00</span></div>
   <div class="bar">
     <button class="rb" id="closeBtn" type="button" aria-label="Назад"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
@@ -196,7 +198,7 @@
     $('boxh').value = st.boxh; $('hVal').textContent = `${st.boxh}% экрана`;
     $('op').value = st.op; $('opVal').textContent = `${st.op}%`;
     $('camFront').setAttribute('aria-pressed', st.cam === 'user'); $('camBack').setAttribute('aria-pressed', st.cam !== 'user');
-    $('q1080').setAttribute('aria-pressed', st.q !== 720); $('q720').setAttribute('aria-pressed', st.q === 720);
+    $('q1440').setAttribute('aria-pressed', st.q === 1440); $('q1080').setAttribute('aria-pressed', st.q === 1080); $('q720').setAttribute('aria-pressed', st.q === 720);
     $('cdOff').setAttribute('aria-pressed', !st.cd); $('cdOn').setAttribute('aria-pressed', !!st.cd);
     $('spd').innerHTML = `${st.wpm}<small>слов/мин</small>`;
   }
@@ -219,13 +221,20 @@
     if (!navigator.mediaDevices?.getUserMedia){ showErr('Этот браузер не даёт доступ к камере. Открой суфлёр в Safari.'); return; }
     try{
       stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: st.cam, width: { ideal: st.q === 720 ? 720 : 1080 }, height: { ideal: st.q === 720 ? 1280 : 1920 }, frameRate: { ideal: 30, max: 30 } },
+        video: { facingMode: st.cam, width: { ideal: st.q }, height: { ideal: Math.round(st.q * 16 / 9) }, frameRate: { ideal: 30, max: 30 } },
         audio: { echoCancellation: true, noiseSuppression: true }
       });
     } catch(e){
       showErr('Нет доступа к камере или микрофону. Разреши доступ: «Настройки» → «Safari» → «Камера» и «Микрофон» → «Разрешить», затем обнови страницу.');
       return;
     }
+    try{
+      const cs = stream.getVideoTracks()[0].getSettings();
+      const short = Math.min(cs.width || 0, cs.height || 0), long = Math.max(cs.width || 0, cs.height || 0);
+      const label = short >= 1440 ? '2K' : short >= 1080 ? '1080p' : short >= 720 ? '720p' : short + 'p';
+      $('res').textContent = short ? `Камера даёт: ${label} · ${short}×${long}${cs.frameRate ? ' · ' + Math.round(cs.frameRate) + ' к/с' : ''}` : '';
+      $('res').hidden = !short;
+    } catch(e){ $('res').hidden = true; }
     live.srcObject = stream; live.classList.toggle('selfie', st.cam === 'user');
     try{ await live.play(); } catch(e){}
     $('setup').hidden = true; $('cam').hidden = false;
