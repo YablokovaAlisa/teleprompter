@@ -305,6 +305,30 @@
     const types = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'];
     return types.find(t => window.MediaRecorder && MediaRecorder.isTypeSupported?.(t)) || '';
   }
+  // Вертикальная запись: кадры камеры рисуются в холст 9:16 (по центру, с обрезкой краёв),
+  // и записывается уже холст — так видео всегда сохраняется вертикальным.
+  let drawOn = false, drawRaf = 0;
+  function makePortraitStream(){
+    const canvas = document.createElement('canvas');
+    if (!canvas.captureStream) return stream;
+    const W = st.q, H = Math.round(st.q * 16 / 9);
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d', { alpha: false });
+    const draw = () => {
+      if (!drawOn) return;
+      const vw = live.videoWidth, vh = live.videoHeight;
+      if (vw && vh){
+        const k = Math.max(W / vw, H / vh), dw = vw * k, dh = vh * k;
+        ctx.drawImage(live, (W - dw) / 2, (H - dh) / 2, dw, dh);
+      }
+      drawRaf = live.requestVideoFrameCallback ? live.requestVideoFrameCallback(draw) : requestAnimationFrame(draw);
+    };
+    drawOn = true; draw();
+    const out = canvas.captureStream(30);
+    stream.getAudioTracks().forEach(t => out.addTrack(t));
+    return out;
+  }
+  function stopDraw(){ drawOn = false; }
   function countdown(){
     return new Promise(res => {
       if (!st.cd) return res();
@@ -317,8 +341,9 @@
     await countdown();
     if (!stream) return;
     const type = pickType();
-    try{ recorder = new MediaRecorder(stream, type ? { mimeType: type } : undefined); }
-    catch(e){ recorder = new MediaRecorder(stream); }
+    const recStream = makePortraitStream();
+    try{ recorder = new MediaRecorder(recStream, type ? { mimeType: type } : undefined); }
+    catch(e){ recorder = new MediaRecorder(recStream); }
     outType = (recorder.mimeType || type || 'video/mp4').split(';')[0];
     chunks = [];
     sizes = []; frozen = false; $('warn').hidden = true;
@@ -342,6 +367,7 @@
   function stopRec(){
     recDur = (Date.now() - recStart) / 1000;
     if (recorder && recorder.state !== 'inactive') recorder.stop();
+    setTimeout(stopDraw, 300);
     pause(); clearInterval(timerIv); $('warn').hidden = true; $('timer').hidden = true;
     $('recBtn').classList.remove('on'); $('recBtn').setAttribute('aria-label', 'Запись');
   }
