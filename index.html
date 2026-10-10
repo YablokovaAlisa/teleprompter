@@ -81,6 +81,8 @@
   .res{ position:absolute; left:12px; bottom:calc(112px + var(--sb)); z-index:3; font:600 12px var(--sans); color:#fff; background:rgba(0,0,0,.45); padding:5px 9px; border-radius:99px; font-variant-numeric:tabular-nums; }
   .warn{ position:absolute; left:12px; right:12px; bottom:calc(140px + var(--sb)); z-index:4; background:#D2453A; color:#fff; font:600 14px/1.4 var(--sans); padding:10px 12px; border-radius:12px; }
   .diag{ color:rgba(243,238,228,.55); font-size:11px; text-align:center; font-variant-numeric:tabular-nums; }
+  .dbtn{ position:absolute; right:12px; bottom:calc(112px + var(--sb)); z-index:3; font:600 12px var(--sans); color:#fff; background:rgba(0,0,0,.45); border:0; padding:6px 10px; border-radius:99px; }
+  .dpanel{ position:absolute; left:12px; right:12px; bottom:calc(150px + var(--sb)); z-index:5; background:rgba(0,0,0,.82); color:#fff; font:500 12px/1.5 ui-monospace, Menlo, monospace; padding:10px 12px; border-radius:12px; white-space:pre-wrap; }
   .count{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font:400 34vmin/1 var(--serif); color:var(--tan); background:rgba(0,0,0,.35); z-index:4; }
 
   /* ---------- готовое видео ---------- */
@@ -146,6 +148,8 @@
     <div class="progress" id="progress"></div>
   </div>
   <div class="res" id="res" hidden></div>
+  <button class="dbtn" id="dbtn" type="button">Диагностика</button>
+  <div class="dpanel" id="dpanel" hidden></div>
   <div class="warn" id="warn" hidden>Видео замерло, а звук идёт. Останови запись и попробуй качество 720p.</div>
   <div class="timer" id="timer" hidden><i></i><span id="timerTxt">0:00</span></div>
   <div class="bar">
@@ -223,56 +227,24 @@
   async function openCam(){
     showErr('');
     if (!navigator.mediaDevices?.getUserMedia){ showErr('Этот браузер не даёт доступ к камере. Открой суфлёр в Safari (iPhone) или Chrome (Android).'); return; }
-    // Ищем вариант, при котором камера отдаёт ВЕРТИКАЛЬНУЮ картинку (без обрезки).
-    // Safari на iPhone ждёт цифры «в горизонтали» и сам поворачивает кадр под телефон.
-    const W = st.q, H = Math.round(st.q * 16 / 9);
-    const variants = [
-      { width: { ideal: H }, height: { ideal: W } },
-      { width: { ideal: W }, height: { ideal: H } },
-      { width: { exact: 1920 }, height: { exact: 1080 } },
-      { width: { exact: 1080 }, height: { exact: 1920 } },
-      { width: { exact: 1280 }, height: { exact: 720 } },
-      { width: { exact: 720 }, height: { exact: 1280 } },
-      { aspectRatio: { exact: 16 / 9 } },
-      { aspectRatio: { exact: 9 / 16 } },
-      { aspectRatio: { exact: 4 / 3 } },
-      { aspectRatio: { exact: 3 / 4 } },
-      {}
-    ];
-    let chosen = null, fallback = null;
     try{
-      for (const v of variants){
-        let vs;
-        try{ vs = await navigator.mediaDevices.getUserMedia({ video: { facingMode: st.cam, frameRate: { ideal: 30, max: 30 }, ...v }, audio: false }); }
-        catch(err){ if (err && err.name === 'NotAllowedError') throw err; continue; }
-        live.srcObject = vs;
-        await new Promise(r => { if (live.videoWidth) r(); else { live.onloadedmetadata = () => r(); setTimeout(r, 1500); } });
-        try{ await live.play(); } catch(e){}
-        if (live.videoHeight > live.videoWidth){ chosen = vs; break; }
-        if (!fallback) fallback = vs; else vs.getTracks().forEach(t => t.stop());
-      }
-      if (chosen && fallback) fallback.getTracks().forEach(t => t.stop());
-      const vstream = chosen || fallback;
-      if (!vstream) throw new Error('no camera');
-      live.srcObject = vstream;
-      stream = new MediaStream(vstream.getVideoTracks());
-      try{
-        const as = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: false });
-        as.getAudioTracks().forEach(t => stream.addTrack(t));
-      } catch(e){ showErr('Нет доступа к микрофону — видео запишется без звука.'); }
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: st.cam, width: { ideal: Math.round(st.q * 16 / 9) }, height: { ideal: st.q }, frameRate: { ideal: 30, max: 30 } },
+        audio: { echoCancellation: true, noiseSuppression: true }
+      });
     } catch(e){
       showErr('Нет доступа к камере или микрофону. iPhone: «Настройки» → «Safari» → «Камера» и «Микрофон» → «Разрешить». Android: значок замка слева от адреса → «Разрешения» → включи камеру и микрофон. Затем обнови страницу.');
       return;
     }
-    live.classList.toggle('selfie', st.cam === 'user');
-    try{ await live.play(); } catch(e){}
-    await new Promise(r => { if (live.videoWidth) r(); else { live.onloadedmetadata = () => r(); setTimeout(r, 1500); } });
-    {
-      const vw = live.videoWidth, vh = live.videoHeight, short = Math.min(vw, vh), long = Math.max(vw, vh);
+    try{
+      const cs = stream.getVideoTracks()[0].getSettings();
+      const short = Math.min(cs.width || 0, cs.height || 0), long = Math.max(cs.width || 0, cs.height || 0);
       const label = short >= 1440 ? '2K' : short >= 1080 ? '1080p' : short >= 720 ? '720p' : short + 'p';
-      $('res').textContent = short ? `Камера: ${label} · ${vw}×${vh} · ${vh > vw ? 'вертикально ✓' : 'камера дала горизонталь — пришли скриншот'}` : '';
+      $('res').textContent = short ? `Камера даёт: ${label} · ${short}×${long}${cs.frameRate ? ' · ' + Math.round(cs.frameRate) + ' к/с' : ''}` : '';
       $('res').hidden = !short;
-    }
+    } catch(e){ $('res').hidden = true; }
+    live.srcObject = stream; live.classList.toggle('selfie', st.cam === 'user');
+    try{ await live.play(); } catch(e){}
     $('setup').hidden = true; $('cam').hidden = false;
     prepareText();
     try{ wake = await navigator.wakeLock?.request('screen'); } catch(e){}
@@ -284,6 +256,23 @@
     try{ wake?.release(); } catch(e){} wake = null;
   }
   $('openBtn').onclick = openCam;
+  $('dbtn').onclick = () => {
+    const pnl = $('dpanel');
+    if (!pnl.hidden){ pnl.hidden = true; return; }
+    const lines = [];
+    try{
+      const vt = stream?.getVideoTracks()[0], at = stream?.getAudioTracks()[0];
+      const vs = vt?.getSettings() || {};
+      lines.push(`Видео-элемент: ${live.videoWidth}×${live.videoHeight}`);
+      lines.push(`Камера: ${vs.width}×${vs.height} · ${Math.round(vs.frameRate || 0)} к/с · ${vs.facingMode || '-'}`);
+      lines.push(`Запрошено: ${Math.round(st.q * 16 / 9)}×${st.q}`);
+      lines.push(`Экран: ${screen.width}×${screen.height} · ${screen.orientation?.type || window.orientation}`);
+      lines.push(`Микрофон: ${at ? at.label || 'без названия' : 'НЕТ'}${at ? ' · ' + at.readyState + (at.muted ? ' · заглушён' : '') : ''}`);
+      lines.push(`Формат записи: ${pickType() || 'по умолчанию'}`);
+      lines.push(navigator.userAgent.replace(/^Mozilla\/5.0 /, ''));
+    } catch(e){ lines.push('Ошибка: ' + e.message); }
+    pnl.textContent = lines.join(String.fromCharCode(10)); pnl.hidden = false;
+  };
   $('closeBtn').onclick = stopCam;
 
   /* ---------- прокрутка текста ---------- */
@@ -337,37 +326,6 @@
     const types = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'];
     return types.find(t => window.MediaRecorder && MediaRecorder.isTypeSupported?.(t)) || '';
   }
-  // Вертикальная запись: кадры камеры рисуются в холст 9:16 (по центру, с обрезкой краёв),
-  // и записывается уже холст — так видео всегда сохраняется вертикальным.
-  let drawOn = false, drawRaf = 0;
-  function makePortraitStream(){
-    const canvas = document.createElement('canvas');
-    if (!canvas.captureStream) return stream;
-    const W = st.q, H = Math.round(st.q * 16 / 9);
-    canvas.width = W; canvas.height = H;
-    const ctx = canvas.getContext('2d', { alpha: false });
-    const draw = () => {
-      if (!drawOn) return;
-      const vw = live.videoWidth, vh = live.videoHeight;
-      if (vw && vh){
-        if (vh >= vw){
-          // вертикальная картинка: лишь слегка подрезаем края до 9:16
-          const k = Math.max(W / vw, H / vh), dw = vw * k, dh = vh * k;
-          ctx.drawImage(live, (W - dw) / 2, (H - dh) / 2, dw, dh);
-        } else {
-          // камера так и не отдала вертикаль — заполняем кадр 9:16 по центру (без фона и затемнения)
-          const k = Math.max(W / vw, H / vh), dw = vw * k, dh = vh * k;
-          ctx.drawImage(live, (W - dw) / 2, (H - dh) / 2, dw, dh);
-        }
-      }
-      drawRaf = live.requestVideoFrameCallback ? live.requestVideoFrameCallback(draw) : requestAnimationFrame(draw);
-    };
-    drawOn = true; draw();
-    const out = canvas.captureStream(30);
-    stream.getAudioTracks().forEach(t => out.addTrack(t));
-    return out;
-  }
-  function stopDraw(){ drawOn = false; }
   function countdown(){
     return new Promise(res => {
       if (!st.cd) return res();
@@ -380,9 +338,8 @@
     await countdown();
     if (!stream) return;
     const type = pickType();
-    const recStream = makePortraitStream();
-    try{ recorder = new MediaRecorder(recStream, type ? { mimeType: type } : undefined); }
-    catch(e){ recorder = new MediaRecorder(recStream); }
+    try{ recorder = new MediaRecorder(stream, type ? { mimeType: type } : undefined); }
+    catch(e){ recorder = new MediaRecorder(stream); }
     outType = (recorder.mimeType || type || 'video/mp4').split(';')[0];
     chunks = [];
     sizes = []; frozen = false; $('warn').hidden = true;
@@ -406,7 +363,6 @@
   function stopRec(){
     recDur = (Date.now() - recStart) / 1000;
     if (recorder && recorder.state !== 'inactive') recorder.stop();
-    setTimeout(stopDraw, 300);
     pause(); clearInterval(timerIv); $('warn').hidden = true; $('timer').hidden = true;
     $('recBtn').classList.remove('on'); $('recBtn').setAttribute('aria-label', 'Запись');
   }
