@@ -80,6 +80,7 @@
   .spd small{ display:block; font-weight:500; font-size:10px; opacity:.7; }
   .res{ position:absolute; left:12px; bottom:calc(112px + var(--sb)); z-index:3; font:600 12px var(--sans); color:#fff; background:rgba(0,0,0,.45); padding:5px 9px; border-radius:99px; font-variant-numeric:tabular-nums; }
   .warn{ position:absolute; left:12px; right:12px; bottom:calc(140px + var(--sb)); z-index:4; background:#D2453A; color:#fff; font:600 14px/1.4 var(--sans); padding:10px 12px; border-radius:12px; }
+  .note.bad{ color:#fff; background:#D2453A; padding:10px 12px; border-radius:12px; font-weight:600; }
   .diag{ color:rgba(243,238,228,.55); font-size:11px; text-align:center; font-variant-numeric:tabular-nums; }
   .dbtn{ position:absolute; right:12px; bottom:calc(112px + var(--sb)); z-index:3; font:600 12px var(--sans); color:#fff; background:rgba(0,0,0,.45); border:0; padding:6px 10px; border-radius:99px; }
   .dpanel{ position:absolute; left:12px; right:12px; bottom:calc(150px + var(--sb)); z-index:5; background:rgba(0,0,0,.82); color:#fff; font:500 12px/1.5 ui-monospace, Menlo, monospace; padding:10px 12px; border-radius:12px; white-space:pre-wrap; }
@@ -228,10 +229,7 @@
     showErr('');
     if (!navigator.mediaDevices?.getUserMedia){ showErr('Этот браузер не даёт доступ к камере. Открой суфлёр в Safari (iPhone) или Chrome (Android).'); return; }
     try{
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: st.cam, width: { ideal: Math.round(st.q * 16 / 9) }, height: { ideal: st.q }, frameRate: { ideal: 30, max: 30 } },
-        audio: { echoCancellation: true, noiseSuppression: true }
-      });
+      await acquire();
     } catch(e){
       showErr('Нет доступа к камере или микрофону. iPhone: «Настройки» → «Safari» → «Камера» и «Микрофон» → «Разрешить». Android: значок замка слева от адреса → «Разрешения» → включи камеру и микрофон. Затем обнови страницу.');
       return;
@@ -243,11 +241,30 @@
       $('res').textContent = short ? `Камера даёт: ${label} · ${short}×${long}${cs.frameRate ? ' · ' + Math.round(cs.frameRate) + ' к/с' : ''}` : '';
       $('res').hidden = !short;
     } catch(e){ $('res').hidden = true; }
-    live.srcObject = stream; live.classList.toggle('selfie', st.cam === 'user');
-    try{ await live.play(); } catch(e){}
+    live.classList.toggle('selfie', st.cam === 'user');
     $('setup').hidden = true; $('cam').hidden = false;
     prepareText();
     try{ wake = await navigator.wakeLock?.request('screen'); } catch(e){}
+  }
+  // Получить камеру и микрофон заново (старые дорожки останавливаем)
+  async function acquire(){
+    stream?.getTracks().forEach(t => t.stop());
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: st.cam, width: { ideal: Math.round(st.q * 16 / 9) }, height: { ideal: st.q }, frameRate: { ideal: 30, max: 30 } },
+      audio: { echoCancellation: true, noiseSuppression: true }
+    });
+    live.srcObject = stream;
+    try{ await live.play(); } catch(e){}
+  }
+  // Микрофон жив? (айфон отключает его, например, после воспроизведения видео со звуком)
+  function micOk(){
+    const at = stream?.getAudioTracks()[0], vt = stream?.getVideoTracks()[0];
+    return !!(at && vt && at.readyState === 'live' && !at.muted && at.enabled && vt.readyState === 'live');
+  }
+  async function ensureMic(force){
+    if (!force && micOk()) return true;
+    try{ await acquire(); } catch(e){ return false; }
+    return micOk();
   }
   function stopCam(){
     if (recorder && recorder.state !== 'inactive') recorder.stop();
@@ -320,7 +337,7 @@
   overlay.addEventListener('pointercancel', () => { drag = null; });
 
   /* ---------- запись ---------- */
-  let sizes = [], frozen = false, recDur = 0;
+  let sizes = [], frozen = false, recDur = 0, micLost = false;
   let recorder = null, chunks = [], recStart = 0, timerIv = 0, outBlob = null, outType = 'video/mp4';
   function pickType(){
     const types = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'];
@@ -335,8 +352,18 @@
   }
   async function startRec(){
     if (!window.MediaRecorder){ alert('Запись видео не поддерживается в этой версии iOS. Обнови iPhone до последней версии.'); return; }
+    if (!(await ensureMic(false))){
+      $('warn').textContent = 'Микрофон не отвечает. Нажми «Назад» и снова «Открыть камеру». Если подключена петличка — проверь, что она вставлена до открытия камеры.';
+      $('warn').hidden = false; return;
+    }
     await countdown();
     if (!stream) return;
+    micLost = false;
+    const at = stream.getAudioTracks()[0];
+    if (at){
+      const lost = () => { if (recorder?.state === 'recording'){ micLost = true; $('warn').textContent = 'Микрофон отключился — звук дальше не пишется. Останови и перезапиши дубль.'; $('warn').hidden = false; } };
+      at.onmute = lost; at.onended = lost;
+    }
     const type = pickType();
     try{ recorder = new MediaRecorder(stream, type ? { mimeType: type } : undefined); }
     catch(e){ recorder = new MediaRecorder(stream); }
@@ -350,7 +377,7 @@
       if (sizes.length >= 6 && !frozen && recorder.state === 'recording'){
         const base = sizes.slice(1, 4).sort((a, b) => a - b)[1];
         const n = sizes.length;
-        if (base > 0 && sizes[n - 1] < base * 0.2 && sizes[n - 2] < base * 0.2){ frozen = true; $('warn').hidden = false; }
+        if (base > 0 && sizes[n - 1] < base * 0.2 && sizes[n - 2] < base * 0.2){ frozen = true; $('warn').textContent = 'Видео замерло, а звук идёт. Останови запись и попробуй качество 720p.'; $('warn').hidden = false; }
       }
     };
     recorder.onstop = showResult;
@@ -373,10 +400,17 @@
     outBlob = new Blob(chunks, { type: outType });
     const v = $('outVideo'); v.src = URL.createObjectURL(outBlob);
     $('result').hidden = false;
-    v.onloadedmetadata = () => {
-      $('diag').textContent = `${fmt(recDur)} · ${(outBlob.size / 1048576).toFixed(1)} МБ · ${v.videoWidth}×${v.videoHeight} · ${outType}${frozen ? ' · было замирание' : ''}`;
-    };
     $('saveNote').textContent = 'Не нужно быть идеальной. Нужно быть настоящей ♡';
+    $('saveNote').classList.remove('bad');
+    v.onloadedmetadata = () => {
+      const tracks = v.audioTracks;
+      const noAudio = (tracks && typeof tracks.length === 'number' && tracks.length === 0) || micLost;
+      $('diag').textContent = `${fmt(recDur)} · ${(outBlob.size / 1048576).toFixed(1)} МБ · ${v.videoWidth}×${v.videoHeight} · ${outType}${frozen ? ' · было замирание' : ''}${noAudio ? ' · БЕЗ ЗВУКА' : ''}`;
+      if (noAudio){
+        $('saveNote').textContent = '⚠ В этом дубле нет звука (микрофон отключился). Нажми «Переснять» — микрофон подключится заново.';
+        $('saveNote').classList.add('bad');
+      }
+    };
   }
   function fileName(){
     const d = new Date(), p = n => String(n).padStart(2, '0');
@@ -394,7 +428,7 @@
     $('saveNote').textContent = 'Видео сохранено в «Файлы» → «Загрузки». Оттуда его можно переслать в Фото.';
   };
   const closeResult = () => { $('result').hidden = true; const v = $('outVideo'); v.pause(); URL.revokeObjectURL(v.src); v.removeAttribute('src'); };
-  $('retakeBtn').onclick = () => { closeResult(); y = 0; paint(); };
+  $('retakeBtn').onclick = async () => { closeResult(); y = 0; paint(); $('warn').hidden = true; await ensureMic(true); };
   $('doneBtn').onclick = () => { closeResult(); stopCam(); };
 
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && recorder?.state === 'recording') stopRec(); });
